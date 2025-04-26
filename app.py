@@ -85,19 +85,27 @@ def weather_fetch(city_name):
     """
     api_key = config.weather_api_key
     base_url = "http://api.openweathermap.org/data/2.5/weather?"
-
+    city_name = city_name.strip()
     complete_url = base_url + "appid=" + api_key + "&q=" + city_name
-    response = requests.get(complete_url)
-    x = response.json()
+    print(f"Complete URL for weather API: {complete_url}")  # Debug print
 
-    if x["cod"] != "404":
-        y = x["main"]
+    try:
+        response = requests.get(complete_url)
+        x = response.json()
+        print("Weather API response:", x)  # Debug log
 
-        temperature = round((y["temp"] - 273.15), 2)
-        humidity = y["humidity"]
-        return temperature, humidity
-    else:
+        if response.status_code == 200 and "main" in x:
+            y = x["main"]
+            temperature = round((y["temp"] - 273.15), 2)
+            humidity = y["humidity"]
+            return temperature, humidity
+        else:
+            print(f"Error fetching weather for {city_name}: {x.get('message', 'Unknown error')}")
+            return None
+    except Exception as e:
+        print(f"Exception in weather_fetch: {str(e)}")
         return None
+
 
 
 def predict_image(img, model=disease_model):
@@ -170,26 +178,33 @@ def crop_prediction():
     title = 'Harvestify - Crop Recommendation'
 
     if request.method == 'POST':
-        N = int(request.form['nitrogen'])
-        P = int(request.form['phosphorous'])
-        K = int(request.form['pottasium'])
-        ph = float(request.form['ph'])
-        rainfall = float(request.form['rainfall'])
+        try:
+            N = int(request.form['nitrogen'])
+            P = int(request.form['phosphorous'])
+            K = int(request.form['potassium'])
+            ph = float(request.form['ph'])
+            rainfall = float(request.form['rainfall'])
+            city = request.form.get("city")
 
-        # state = request.form.get("stt")
-        city = request.form.get("city")
+            print(f"Fetching weather for city: {city}")  # Debug log
+            print(f"Using API key: {config.weather_api_key}")  # Debug print to verify API key
+            weather = weather_fetch(city)
 
-        if weather_fetch(city) != None:
-            temperature, humidity = weather_fetch(city)
-            data = np.array([[N, P, K, temperature, humidity, ph, rainfall]])
-            my_prediction = crop_recommendation_model.predict(data)
-            final_prediction = my_prediction[0]
+            if weather is not None:
+                temperature, humidity = weather
+                data = np.array([[N, P, K, temperature, humidity, ph, rainfall]])
+                my_prediction = crop_recommendation_model.predict(data)
+                final_prediction = my_prediction[0]
 
-            return render_template('crop-result.html', prediction=final_prediction, title=title)
-
-        else:
-
+                return render_template('crop-result.html', prediction=final_prediction, title=title)
+            else:
+                # Weather fetch failed
+                print("Weather fetch returned None")  # Debug log
+                return render_template('try_again.html', title=title)
+        except Exception as e:
+            print(f"Error during crop prediction: {str(e)}")
             return render_template('try_again.html', title=title)
+
 
 # render fertilizer recommendation result page
 
